@@ -28,11 +28,9 @@ def play_alert(label):
         alert_file = f"asset/alert/distracted_{random.randint(1, 3)}.mp3"
     else:
         return
-
     try:
-        if not pygame.mixer.get_busy():
-            pygame.mixer.music.load(alert_file)
-            pygame.mixer.music.play()
+        pygame.mixer.music.load(alert_file)
+        pygame.mixer.music.play()
     except Exception as e:
         print(f"❌ Gagal memutar suara: {e}")
 
@@ -55,8 +53,7 @@ def preprocess_face(image, bbox):
     face = np.expand_dims(face, axis=0)
     return face
 
-last_prediction = ""
-last_alert_time = 5
+last_alert_time = 0
 alert_interval = 10
 
 while True:
@@ -66,7 +63,6 @@ while True:
 
     h, w, _ = frame.shape
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
     results = face_detection.process(rgb)
 
     if results.detections:
@@ -77,11 +73,21 @@ while True:
             width = int(bboxC.width * w)
             height = int(bboxC.height * h)
 
-            x, y = max(x, 0), max(y, 0)
-            width, height = min(width, w - x), min(height, h - y)
+            margin_x = 50
+            margin_y_top = 200
+            margin_y_bottom = 150
+
+            x -= margin_x
+            y -= margin_y_top
+            width += 2 * margin_x
+            height += margin_y_top + margin_y_bottom
+
+            x = max(x, 0)
+            y = max(y, 0)
+            width = min(width, w - x)
+            height = min(height, h - y)
 
             face_img = preprocess_face(frame, (x, y, width, height))
-
             interpreter.set_tensor(input_details[0]['index'], face_img)
             interpreter.invoke()
             output_data = interpreter.get_tensor(output_details[0]['index'])
@@ -90,11 +96,9 @@ while True:
 
             print(f"[{active_model_name}] Prediksi: {label_text}")
 
-            # Cek apakah perlu memutar alert
             current_time = time.time()
-            if label_text in ["mengantuk", "distraksi"] and (label_text != last_prediction or current_time - last_alert_time > alert_interval):
+            if label_text in ["mengantuk", "distraksi"] and (current_time - last_alert_time) > alert_interval:
                 play_alert(label_text)
-                last_prediction = label_text
                 last_alert_time = current_time
 
             cv2.rectangle(frame, (x, y), (x + width, y + height), (0, 255, 0), 2)
@@ -117,7 +121,7 @@ while True:
         except ValueError:
             pass
 
-    time.sleep(0.1)  # untuk 10 FPS
+    time.sleep(0.1)
 
 cap.release()
 cv2.destroyAllWindows()
